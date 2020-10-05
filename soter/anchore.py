@@ -3,12 +3,8 @@ Module providing the ASGI app for soter-anchore.
 """
 
 import asyncio
-import collections
-import json
-import itertools
+import logging
 import os
-import re
-import shlex
 
 import httpx
 
@@ -25,6 +21,9 @@ from .scanner.models import ScannerStatus, Image, Severity, PackageType, ImageVu
 dispatcher = Dispatcher()
 
 
+logger = logging.getLogger(__name__)
+
+
 # Get the Anchore config from the environment
 ANCHORE_URL = os.environ['ANCHORE_URL']
 ANCHORE_USERNAME = os.environ['ANCHORE_USERNAME']
@@ -33,6 +32,8 @@ try:
         ANCHORE_PASSWORD = fh.read()
 except KeyError:
     ANCHORE_PASSWORD = os.environ['ANCHORE_PASSWORD']
+
+ANCHORE_POLL_INTERVAL = float(os.environ.get('ANCHORE_POLL_INTERVAL', '2.0'))
 
 
 def anchore_client():
@@ -50,38 +51,39 @@ async def status():
     """
     Return status information for the scanner.
     """
-    # Pull credentials from the environment
-    async with anchore_client() as client:
-        # Fetch system and feeds information concurrently
-        system, feeds = await asyncio.gather(
-            client.get('/system'),
-            client.get('/system/feeds')
-        )
-    system.raise_for_status()
-    feeds.raise_for_status()
-    # Get the availability and version from the analyzer state
     try:
+        # Pull credentials from the environment
+        async with anchore_client() as client:
+            # Fetch system and feeds information concurrently
+            system, feeds = await asyncio.gather(
+                client.get('/system'),
+                client.get('/system/feeds')
+            )
+        system.raise_for_status()
+        feeds.raise_for_status()
+        # Get the availability and version from the analyzer state
         analyzer_state = next(
             state
             for state in system.json()['service_states']
             if state['servicename'] == 'analyzer'
         )
-    except StopIteration:
-        version = 'unknown'
-        available = False
-        message = 'could not detect status'
-    else:
         version = analyzer_state['service_detail']['version']
         available = analyzer_state['status']
         message = analyzer_state['status_message']
-    if available:
-        properties = {
-            # Use the last sync time of each group as a property
-            f"{group['name']}/last-sync": group['last_sync']
-            for feed in feeds.json() if feed['enabled']
-            for group in feed['groups'] if group['enabled']
-        }
-    else:
+        if available:
+            properties = {
+                # Use the last sync time of each group as a property
+                f"{group['name']}/last-sync": group['last_sync']
+                for feed in feeds.json() if feed['enabled']
+                for group in feed['groups'] if group['enabled']
+            }
+        else:
+            properties = None
+    except:
+        logger.exception('Error detecting Anchore state')
+        version = 'unknown'
+        available = False
+        message = 'could not detect status'
         properties = None
     return ScannerStatus(
         kind = 'Anchore Engine',
@@ -121,7 +123,7 @@ async def scan_image(image):
             analysis_status = response.json()[0]['analysis_status']
             if analysis_status == "analyzed":
                 break
-            await asyncio.sleep(self.poll_interval)
+            await asyncio.sleep(ANCHORE_POLL_INTERVAL)
             response = await client.get(f'/images/{image.digest}')
             response.raise_for_status()
         # Once analysis is complete, fetch the vulnerabilities
