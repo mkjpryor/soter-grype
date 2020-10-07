@@ -11,24 +11,23 @@ with open(os.path.join(here, 'README.md')) as f:
 
 if __name__ == "__main__":
     setup(
-        name = 'soter-anchore',
+        name = 'soter-grype',
         setup_requires = ['setuptools_scm'],
         use_scm_version = True,
-        description = 'Soter scanner implementation for Anchore.',
+        description = 'Soter scanner implementation for Grype, a scanner from Anchore.',
         long_description = README,
         classifiers = [
             "Programming Language :: Python",
         ],
         author = 'Matt Pryor',
         author_email = 'matt.pryor@stfc.ac.uk',
-        url = 'https://github.com/mkjpryor/soter-anchore',
-        keywords = 'container image scan security vulnerability configuration issue anchore',
+        url = 'https://github.com/mkjpryor/soter-grype',
+        keywords = 'container image scan security vulnerability configuration issue grype anchore',
         packages = find_namespace_packages(include = ['soter.*']),
         include_package_data = True,
         zip_safe = False,
         install_requires = [
             'quart',
-            'httpx',
             'jsonrpc-asyncio-server',
             'soter-scanner-model',
         ],

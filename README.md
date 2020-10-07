@@ -1,1 +1,1 @@
-# soter-anchore
+# soter-grype
