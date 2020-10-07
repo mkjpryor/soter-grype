@@ -110,6 +110,10 @@ async def create_semaphore():
     app.scan_semaphore = asyncio.Semaphore(GRYPE_CONCURRENT_SCANS)
 
 
+#: Set of artifact types that represent OS-level vulnerabilities
+OS_ARTIFACT_TYPES = {'apk', 'deb', 'rpm'}
+
+
 @dispatcher.register
 async def scan_image(image):
     """
@@ -139,12 +143,12 @@ async def scan_image(image):
                 # OS packages have "distro" in their search keys
                 package_type = (
                     PackageType.OS
-                    if 'distro' in match['matchDetails']['searchKey']
+                    if match['artifact']['type'] in OS_ARTIFACT_TYPES
                     else PackageType.NON_OS
                 ),
                 package_location = (
                     next(iter(match['artifact']['locations']))['path']
-                    if 'distro' not in match['matchDetails']['searchKey']
+                    if match['artifact']['type'] not in OS_ARTIFACT_TYPES
                     else None
                 ),
                 fix_version = match['vulnerability'].get('fixedInVersion')
